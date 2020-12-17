@@ -8,11 +8,8 @@ class ChatViewController: UIViewController {
     @IBOutlet weak var tableView: UITableView!
     @IBOutlet weak var messageTextfield: UITextField!
     
-    var messages: [Message] = [
-        Message(sender: "1@gmail.com", body: "Yoyoyoy"),
-        Message(sender: "1@gmail.com", body: "Bruuuh"),
-        Message(sender: "1@gmail.com", body: "nah")
-    ]
+    let db = Firestore.firestore()
+    var messages: [Message] = []
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -21,13 +18,58 @@ class ChatViewController: UIViewController {
         title = K.appName
         navigationItem.hidesBackButton = true
         
-        
-        
-        
         tableView.register(UINib(nibName: K.cellNibName, bundle: nil), forCellReuseIdentifier: K.cellIdentifier)
+        
+        loadMessagesFromDb()
+    }
+    
+    func loadMessagesFromDb() {
+        
+        messages = []
+        
+        db.collection(K.FStore.collectionName).getDocuments { (querySnapshot, error) in
+            
+            if let err = error {
+                print("Error getting documents: \(err)")
+            } else {
+                if let snapShotDocuments = querySnapshot?.documents {
+                    
+                    for doc in snapShotDocuments {
+                        let data = doc.data()
+                        if let messageSender = data[K.FStore.senderField] as? String,
+                           let messageBody = data[K.FStore.bodyField] as? String {
+                            let newMEssage = Message(sender: messageSender, body: messageBody)
+                            self.messages.append(newMEssage)
+                            self.updateUI()
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    func updateUI() {
+        
+        DispatchQueue.main.async {
+            self.tableView.reloadData()
+        }
     }
     
     @IBAction func sendPressed(_ sender: UIButton) {
+        
+        if let sender = Auth.auth().currentUser?.email,
+           let messageBody = messageTextfield.text {
+            db.collection(K.FStore.collectionName).addDocument(data:
+                                                                [K.FStore.senderField : sender,
+                                                                 K.FStore.bodyField: messageBody]) { (error) in
+                
+                if let e = error {
+                    print(e)
+                } else {
+                    print("Success")
+                }
+            }
+        }
     }
     
     @IBAction func logOutPressed(_ sender: UIBarButtonItem) {
@@ -39,11 +81,7 @@ class ChatViewController: UIViewController {
         } catch let signOutError as NSError {
             print ("Error signing out: %@", signOutError)
         }
-        
     }
-    
-    
-
 }
 
 extension ChatViewController: UITableViewDataSource {
@@ -60,7 +98,5 @@ extension ChatViewController: UITableViewDataSource {
         cell.messageBubbleText.text = message 
         return cell
     }
-    
-    
 }
 
